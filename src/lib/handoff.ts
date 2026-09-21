@@ -152,7 +152,7 @@ export async function handoffToOpenCode(
 
   if (method === "desktop") {
     try {
-      await execAsync(`open "opencode://session/${sessionId}"`)
+      await execAsync(`open "opencode://open-project?directory=${encodeURIComponent(dir)}"`)
       await showHUD("Opened in OpenCode Desktop")
     } catch {
       await Clipboard.copy(`cd "${dir}" && ${command}`)

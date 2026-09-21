@@ -2,7 +2,6 @@ import {
   List,
   ActionPanel,
   Action,
-  Detail,
   Icon,
   showToast,
   Toast,
@@ -13,8 +12,9 @@ import {
   popToRoot,
   Clipboard,
   Color,
+  clearSearchBar,
 } from "@raycast/api"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useOpenCode } from "./hooks/useOpenCode"
 import { useProviders } from "./hooks/useProviders"
 import { useProjects } from "./hooks/useProjects"
@@ -40,6 +40,7 @@ export default function Command(props: LaunchProps<{ arguments: Arguments }>) {
 
   const [searchText, setSearchText] = useState(initialQuestion)
   const [response, setResponse] = useState<string | null>(null)
+  const [messages, setMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null)
   const [selectedModel, setSelectedModel] = useState<{ providerID: string; modelID: string } | null>(null)
@@ -108,8 +109,15 @@ export default function Command(props: LaunchProps<{ arguments: Arguments }>) {
         agent: selectedAgent || undefined,
         model: activeModel!,
       })
+      setSearchText("")
       setResponse(result)
       setStreamingText(null)
+      setMessages((prev) => [
+        ...prev,
+        { role: "user", content: cleanQuery },
+        { role: "assistant", content: result },
+      ])
+      await clearSearchBar({ forceScrollToTop: true })
       toast.style = Toast.Style.Success
       toast.title = "Response ready"
       toast.message = undefined
@@ -125,11 +133,13 @@ export default function Command(props: LaunchProps<{ arguments: Arguments }>) {
 
   async function handleSlashCommand(commandName: string) {
     if (commandName === "clear") {
+      setMessages([])
       setResponse(null)
       setSearchText("")
       setSelectedAgent(null)
       await showToast({ title: "Conversation cleared" })
     } else if (commandName === "compact") {
+      setMessages([])
       setResponse(null)
       setSearchText("")
       await showToast({ title: "Context compacted" })
@@ -168,67 +178,45 @@ export default function Command(props: LaunchProps<{ arguments: Arguments }>) {
 
   async function handleHandoff() {
     if (!currentSession) return
-    await handoffToOpenCode(currentSession.id, preferences.handoffMethod, activeDirectory, preferences.terminalApp)
+    const sessionDir = currentSession.directory || activeDirectory
+    await handoffToOpenCode(currentSession.id, preferences.handoffMethod, sessionDir, preferences.terminalApp)
   }
 
   async function handleCopyCommand() {
     if (!currentSession) return
-    await copySessionCommand(currentSession.id, activeDirectory)
+    await copySessionCommand(currentSession.id, currentSession.directory || activeDirectory)
   }
 
-  function handleNewQuestion() {
-    setResponse(null)
-    setSearchText("")
-    setSelectedAgent(null)
-  }
+  const transcriptMarkdown =
+    messages.length === 0
+      ? "No messages yet."
+      : messages
+          .map(
+            (m) =>
+              (m.role === "user" ? "## You\n\n" : "## OpenCode\n\n") +
+              m.content +
+              (isProcessing && m === messages[messages.length - 1] && m.role === "user"
+                ? "\n\n_Thinking..._"
+                : "")
+          )
+          .join("\n\n---\n\n")
 
-  if (response) {
-    return (
-      <Detail
-        markdown={response}
-        navigationTitle={currentSession?.title || "OpenCode Response"}
-        metadata={
-          <Detail.Metadata>
-            {activeDirectory && <Detail.Metadata.Label title="Directory" text={activeDirectory.replace(homedir(), "~")} />}
-            {selectedAgent && <Detail.Metadata.Label title="Agent" text={selectedAgent} />}
-            {activeModel && <Detail.Metadata.Label title="Model" text={activeModel.modelID} />}
-            {currentSession && <Detail.Metadata.Label title="Session" text={currentSession.id.slice(0, 8)} />}
-          </Detail.Metadata>
-        }
-        actions={
-          <ActionPanel>
-            <ActionPanel.Section title="Actions">
-              <Action
-                title="Continue in OpenCode"
-                icon={Icon.Terminal}
-                shortcut={Keyboard.Shortcut.Common.Open}
-                onAction={handleHandoff}
-              />
-              <Action.CopyToClipboard
-                title="Copy Response"
-                content={response}
-                shortcut={Keyboard.Shortcut.Common.Copy}
-              />
-              <Action
-                title="Copy Session Command"
-                icon={Icon.Clipboard}
-                shortcut={{ modifiers: ["cmd", "shift"], key: "c" }}
-                onAction={handleCopyCommand}
-              />
-            </ActionPanel.Section>
-            <ActionPanel.Section title="Navigation">
-              <Action
-                title="New Question"
-                icon={Icon.Plus}
-                shortcut={Keyboard.Shortcut.Common.New}
-                onAction={handleNewQuestion}
-              />
-            </ActionPanel.Section>
-          </ActionPanel>
-        }
-      />
-    )
-  }
+  const conversationActions = (
+    <ActionPanel>
+      <Action title="Submit question" icon={Icon.ArrowRight} onAction={handleSubmit} />
+      <Action title="Continue in OpenCode" icon={Icon.Terminal} onAction={handleHandoff} />
+      {response && <Action.CopyToClipboard title="Copy Last Response" content={response} />}
+      <Action title="Copy Session Command" icon={Icon.Clipboard} onAction={handleCopyCommand} />
+      {messages.length > 0 && (
+        <Action
+          title="New conversation"
+          icon={Icon.Plus}
+          shortcut={{ modifiers: ["cmd", "shift"], key: "backspace" }}
+          onAction={() => handleSlashCommand("clear")}
+        />
+      )}
+    </ActionPanel>
+  )
 
   // Build context accessories for the header
   const contextAccessories: List.Item.Accessory[] = []
@@ -245,6 +233,8 @@ export default function Command(props: LaunchProps<{ arguments: Arguments }>) {
   return (
     <List
       isLoading={isLoading || isProcessing || modelsLoading}
+      isShowingDetail={messages.length > 0}
+      selectedItemId={messages.length > 0 ? "conversation" : undefined}
       searchText={searchText}
       onSearchTextChange={setSearchText}
       searchBarPlaceholder="Ask anything... (@ for agents/paths, / for commands)"
@@ -301,6 +291,16 @@ export default function Command(props: LaunchProps<{ arguments: Arguments }>) {
       filtering={false}
       throttle
     >
+      {messages.length > 0 && (
+        <List.Item
+          id="conversation"
+          title="Conversation"
+          subtitle={`${messages.length} messages`}
+          icon={Icon.Message}
+          detail={<List.Item.Detail markdown={transcriptMarkdown} />}
+          actions={conversationActions}
+        />
+      )}
       {!isConnected && !isLoading ? (
         <List.EmptyView
           title="Not connected to OpenCode"
@@ -359,6 +359,39 @@ export default function Command(props: LaunchProps<{ arguments: Arguments }>) {
         </List.Section>
       ) : (
         <>
+          {searchText.trim() && (
+            <List.Section title="Ask OpenCode">
+              <List.Item
+                title={searchText}
+                subtitle="Press Enter to submit"
+                icon={Icon.QuestionMark}
+                accessories={contextAccessories}
+                actions={
+                  <ActionPanel>
+                    <Action title="Submit" icon={Icon.ArrowRight} onAction={handleSubmit} />
+                    <Action
+                      title="Submit and Close"
+                      icon={Icon.Clock}
+                      shortcut={{ modifiers: ["cmd", "shift"], key: "return" }}
+                      onAction={async () => {
+                        handleSubmit()
+                        await showHUD("Processing... Open Raycast again to see response")
+                        await popToRoot()
+                      }}
+                    />
+                    {selectedAgent && (
+                      <Action
+                        title="Clear Agent"
+                        icon={Icon.XMarkCircle}
+                        onAction={() => setSelectedAgent(null)}
+                      />
+                    )}
+                  </ActionPanel>
+                }
+              />
+            </List.Section>
+          )}
+
           {/* Context Bar - Always visible when agent/directory is selected */}
           {(selectedAgent || activeDirectory) && (
             <List.Section title="Current Context">
@@ -389,39 +422,6 @@ export default function Command(props: LaunchProps<{ arguments: Arguments }>) {
                       icon={Icon.Folder}
                       onAction={() => setSearchText("@~/")}
                     />
-                  </ActionPanel>
-                }
-              />
-            </List.Section>
-          )}
-
-          {searchText.trim() && (
-            <List.Section title="Ask OpenCode">
-              <List.Item
-                title={searchText}
-                subtitle="Press Enter to submit"
-                icon={Icon.QuestionMark}
-                accessories={contextAccessories}
-                actions={
-                  <ActionPanel>
-                    <Action title="Submit" icon={Icon.ArrowRight} onAction={handleSubmit} />
-                    <Action
-                      title="Submit and Close"
-                      icon={Icon.Clock}
-                      shortcut={{ modifiers: ["cmd", "shift"], key: "return" }}
-                      onAction={async () => {
-                        handleSubmit()
-                        await showHUD("Processing... Open Raycast again to see response")
-                        await popToRoot()
-                      }}
-                    />
-                    {selectedAgent && (
-                      <Action
-                        title="Clear Agent"
-                        icon={Icon.XMarkCircle}
-                        onAction={() => setSelectedAgent(null)}
-                      />
-                    )}
                   </ActionPanel>
                 }
               />

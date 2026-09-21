@@ -1,6 +1,6 @@
-# OpenCode for Raycast
+# OpenCode for Tinycast
 
-A Raycast extension for [OpenCode](https://opencode.ai) - AI coding assistant with full project context, session management, and seamless terminal handoff.
+A Raycast extension for [OpenCode](https://opencode.ai) - AI coding assistant with full project context, session management, and seamless terminal handoff. This is a fork of Opencode for Raycast (https://github.com/dpshde/raycast-opencode) but with a few fixes so that it works in Tinycast and have a better UI for the Ask Opencode feature.
 
 ## Features
 
@@ -29,14 +29,16 @@ A Raycast extension for [OpenCode](https://opencode.ai) - AI coding assistant wi
 
 ### Install Extension
 
-Install from Raycast Store, or build from source:
+Build from source:
 
 ```bash
-git clone https://github.com/dpshade22/raycast-opencode.git
-cd raycast-opencode
+git clone https://github.com/mperreir/tinycast-opencode.git
+cd tinycast-opencode
 bun install
-bun run dev
+bun run build
 ```
+
+Then in tinycast extension settings, import the extension "From folder"
 
 ## Usage
 
@@ -45,7 +47,7 @@ bun run dev
 1. Open Raycast and search for "Ask OpenCode"
 2. Type your question
 3. Optionally add `@~/path/to/project` for project context
-4. Press Enter to get a response
+4. Press Enter to get a response (and continue a short conversation)
 5. Press `Cmd+O` to continue in your terminal
 
 ### Recent Sessions

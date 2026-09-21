@@ -30,9 +30,9 @@ src/
     usePathAutocomplete.ts # @path autocomplete with filesystem traversal
     
   lib/
-    opencode.ts        # HTTP client for OpenCode API (localhost:4096)
+    opencode.ts        # Typed HTTP client for the OpenCode server API
     handoff.ts         # Terminal app launchers (Ghostty, iTerm, etc.)
-    server-manager.ts  # Auto-starts OpenCode server if not running
+    server-manager.ts  # Locates/auto-starts the OpenCode server and caches its port
 ```
 
 ## Key Patterns
@@ -50,20 +50,22 @@ import { List, ActionPanel, Action, showToast, Toast, getPreferenceValues } from
 
 ### OpenCode API
 
-The extension communicates with OpenCode server at `localhost:4096`:
+The extension talks to the OpenCode server through `getClient()` in `lib/opencode.ts` (a typed `OpenCodeClient`). The server URL is **not fixed**: `server-manager.ts` uses `DEFAULT_PORT = 4096` but auto-discovers a free port in the range `19000-19999` and caches it in `LocalStorage` under `opencode-server-port` (`ensureServer()`). Always obtain the client via `getClient(directory?)`, never hardcode a URL.
 
 ```typescript
 const client = await getClient()
 const sessions = await client.listSessions()
-const messages = await client.getMessages(sessionId, limit)
+const messages = await client.getSessionMessages(sessionId, limit)
 ```
 
-Key endpoints:
-- `GET /session` - List all sessions
-- `GET /session/:id` - Get session details
-- `GET /session/:id/message?limit=N` - Get messages
-- `DELETE /session/:id` - Delete session
-- `POST /session/:id/message` - Send message
+Client methods (all thin wrappers over the HTTP API):
+- `health()` - `GET /global/health`
+- `listSessions()` / `createSession(title?)` - `GET|POST /session`
+- `getSession(id)` / `deleteSession(id)` - `GET|DELETE /session/:id`
+- `getSessionMessages(id, limit?)` - `GET /session/:id/message?limit=N`
+- `sendPrompt(id, text, {agent, model})` - `POST /session/:id/message`
+- `abortSession(id)` - `POST /session/:id/abort`
+- `listAgents()` / `listCommands()` / `listProviders()` - `GET /agent`, `GET /command`, `GET /provider`
 
 ### Terminal Handoff
 
@@ -146,7 +148,7 @@ bun run dev
 2. **execAsync for terminals**: Use `child_process.exec` with proper escaping
 3. **AppleScript escaping**: Double-escape quotes for osascript commands
 4. **LocalStorage limits**: Raycast LocalStorage has size limits - index selectively
-5. **Server connection**: OpenCode server must be running on port 4096
+5. **Server connection**: `getClient()` requires the OpenCode server; `ensureServer()` starts it or finds the cached port (range `19000-19999`, `opencode-server-port` in LocalStorage). Don't assume a fixed port like 4096.
 
 ## Dependencies
 

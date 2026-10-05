@@ -19,7 +19,7 @@ import { useOpenCode } from "./hooks/useOpenCode"
 import { useProviders } from "./hooks/useProviders"
 import { useProjects } from "./hooks/useProjects"
 import { usePathAutocomplete, extractPathFromQuery } from "./hooks/usePathAutocomplete"
-import { handoffToOpenCode, copySessionCommand } from "./lib/handoff"
+import { handoffToOpenCode, handoffToOpenChamber, copySessionCommand } from "./lib/handoff"
 import { homedir } from "os"
 
 import { TerminalApp } from "./lib/handoff"
@@ -182,6 +182,10 @@ export default function Command(props: LaunchProps<{ arguments: Arguments }>) {
     await handoffToOpenCode(currentSession.id, preferences.handoffMethod, sessionDir, preferences.terminalApp)
   }
 
+  async function handleOpenChamber(target: "web" | "desktop") {
+    await handoffToOpenChamber(target)
+  }
+
   async function handleCopyCommand() {
     if (!currentSession) return
     await copySessionCommand(currentSession.id, currentSession.directory || activeDirectory)
@@ -205,6 +209,12 @@ export default function Command(props: LaunchProps<{ arguments: Arguments }>) {
     <ActionPanel>
       <Action title="Submit question" icon={Icon.ArrowRight} onAction={handleSubmit} />
       <Action title="Continue in OpenCode" icon={Icon.Terminal} onAction={handleHandoff} />
+      <Action title="Open in OpenChamber (Web)" icon={Icon.Globe} onAction={() => handleOpenChamber("web")} />
+      <Action
+        title="Open in OpenChamber (Desktop)"
+        icon={Icon.Window}
+        onAction={() => handleOpenChamber("desktop")}
+      />
       {response && <Action.CopyToClipboard title="Copy Last Response" content={response} />}
       <Action title="Copy Session Command" icon={Icon.Clipboard} onAction={handleCopyCommand} />
       {messages.length > 0 && (

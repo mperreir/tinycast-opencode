@@ -1,31 +1,16 @@
 import { useState, useEffect } from "react";
-import { getServerUrl } from "../lib/server-manager";
+import { getClient, Model, Provider } from "../lib/opencode";
 import { homedir } from "os";
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 
-export interface Model {
-  id: string;
-  providerID: string;
-  name: string;
-}
-
-export interface Provider {
-  id: string;
-  name: string;
-  models: Record<string, Model>;
-}
+export type { Model, Provider };
 
 export interface FavoriteModel {
   providerID: string;
   providerName: string;
   modelID: string;
   modelName: string;
-}
-
-export interface ProviderResponse {
-  all: Provider[];
-  default: Record<string, string>;
 }
 
 interface LocalModelConfig {
@@ -121,14 +106,9 @@ export function useProviders() {
 
   useEffect(() => {
     async function fetchProviders() {
-      const server = await getServerUrl()
-      const baseUrl = server || "http://localhost:4096"
       try {
-        const response = await fetch(`${baseUrl}/provider`);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch providers: ${response.statusText}`);
-        }
-        const data = (await response.json()) as ProviderResponse;
+        const client = await getClient();
+        const data = await client.listProviders();
         const configuredProviderIds = getConfiguredProviderIds();
         const filteredProviders =
           configuredProviderIds.size > 0

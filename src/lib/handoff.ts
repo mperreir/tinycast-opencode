@@ -1,8 +1,11 @@
 import { showHUD, Clipboard, showToast, Toast } from "@raycast/api"
 import { exec } from "child_process"
 import { promisify } from "util"
+import { findAppServerPort } from "./openchamber"
 
 const execAsync = promisify(exec)
+
+const OPENCHAMBER_APP = "OpenChamber"
 
 export type TerminalApp = "default" | "ghostty" | "iterm" | "warp" | "alacritty" | "kitty" | "terminal" | "hyper"
 
@@ -174,6 +177,59 @@ export async function handoffToOpenCode(
       style: Toast.Style.Failure,
       title: `Failed to open ${config.name}`,
       message: "Command copied to clipboard instead",
+    })
+  }
+}
+
+export async function handoffToOpenChamber(target: "web" | "desktop"): Promise<void> {
+  if (target === "desktop") {
+    try {
+      await execAsync(`open -a ${OPENCHAMBER_APP}`)
+      await showHUD("Opened in OpenChamber")
+    } catch {
+      await showToast({
+        style: Toast.Style.Failure,
+        title: "OpenChamber not found",
+        message: "Install OpenChamber to use this action",
+      })
+    }
+    return
+  }
+
+  let port = await findAppServerPort()
+  if (!port) {
+    try {
+      await execAsync(`open -a ${OPENCHAMBER_APP}`)
+    } catch {
+      await showToast({
+        style: Toast.Style.Failure,
+        title: "OpenChamber not found",
+        message: "Install OpenChamber to use this action",
+      })
+      return
+    }
+    for (let i = 0; i < 10 && !port; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+      port = await findAppServerPort()
+    }
+  }
+
+  if (!port) {
+    await showToast({
+      style: Toast.Style.Failure,
+      title: "OpenChamber web UI unavailable",
+      message: "The app started but no server port was found",
+    })
+    return
+  }
+
+  try {
+    await execAsync(`open "http://127.0.0.1:${port}/"`)
+    await showHUD("Opened OpenChamber Web")
+  } catch {
+    await showToast({
+      style: Toast.Style.Failure,
+      title: "Failed to open browser",
     })
   }
 }

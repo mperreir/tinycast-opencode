@@ -1,7 +1,7 @@
 import { List, ActionPanel, Action, Icon, showToast, Toast, getPreferenceValues, confirmAlert, Keyboard, Alert } from "@raycast/api"
 import { useState, useEffect } from "react"
 import { getClient, Session } from "./lib/opencode"
-import { handoffToOpenCode, copySessionCommand } from "./lib/handoff"
+import { handoffToOpenCode, handoffToOpenChamber, copySessionCommand } from "./lib/handoff"
 import { useSessionSearch } from "./hooks/useSessionSearch"
 import { homedir } from "os"
 
@@ -75,6 +75,10 @@ export default function Command() {
     await handoffToOpenCode(session.id, preferences.handoffMethod, session.directory, preferences.terminalApp)
   }
 
+  async function handleOpenChamber(target: "web" | "desktop") {
+    await handoffToOpenChamber(target)
+  }
+
   async function handleCopyCommand(session: Session) {
     await copySessionCommand(session.id, session.directory)
   }
@@ -127,6 +131,16 @@ export default function Command() {
                     icon={Icon.Terminal}
                     shortcut={Keyboard.Shortcut.Common.Open}
                     onAction={() => handleHandoff(session)}
+                  />
+                  <Action
+                    title="Open in OpenChamber (Web)"
+                    icon={Icon.Globe}
+                    onAction={() => handleOpenChamber("web")}
+                  />
+                  <Action
+                    title="Open in OpenChamber (Desktop)"
+                    icon={Icon.Window}
+                    onAction={() => handleOpenChamber("desktop")}
                   />
                   <Action
                     title="Copy Session Command"
